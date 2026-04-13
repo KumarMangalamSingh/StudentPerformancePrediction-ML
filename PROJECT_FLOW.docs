@@ -1,0 +1,297 @@
+# Student Performance Prediction ML - Project Flow
+
+## 1. Project Purpose
+
+This project is a Streamlit-based machine learning dashboard for understanding student behavior and predicting student performance groups.
+
+The app loads a student dataset from `AI-Data.csv`, shows exploratory charts, trains three classification models, compares their accuracy, and lets a user enter student activity details to get a predicted performance class.
+
+The target output is the `Class` column:
+
+- `H` = high performance
+- `M` = medium performance
+- `L` = low performance / needs support
+
+## 2. Main Files
+
+| File | Purpose |
+| --- | --- |
+| `app.py` | Main Streamlit dashboard. This is the file users run to open the web app. |
+| `AI-Data.csv` | Dataset used for charts, training, testing, and prediction. |
+| `requirements.txt` | Python package list needed to run the project. |
+| `Project.py` | Older/console-style ML exploration script. The Streamlit UI mainly uses `app.py`. |
+| `README.md` | Short project description. |
+
+## 3. Tech Stack
+
+| Technology | Where it is used | Why it is used |
+| --- | --- | --- |
+| Python | Whole project | Main programming language. |
+| Streamlit | `app.py` | Creates the web dashboard, layout, sliders, selectboxes, tables, charts, and prediction output. |
+| Pandas | `app.py`, `Project.py` | Reads `AI-Data.csv`, copies data, encodes columns, creates model input tables, and builds accuracy/importance dataframes. |
+| Seaborn | `app.py`, `Project.py` | Creates statistical charts like heatmaps, pairplots, histograms, boxplots, countplots, and feature importance plots. |
+| Matplotlib | `app.py`, `Project.py` | Provides chart figures and axes used by Seaborn and displayed in Streamlit. |
+| scikit-learn | `app.py`, `Project.py` | Handles train/test splitting, feature scaling, model training, prediction, accuracy scoring, and confusion matrix generation. |
+| NumPy | Listed in `requirements.txt` | General scientific Python dependency; earlier code used it directly, and it is also used by the ML stack. |
+| HTML/CSS inside Streamlit | `app.py` | Adds the background image, navbar visibility, spacing, borders, shadows, and alignment styling. |
+
+## 4. How The App Starts
+
+The project is run from the project folder:
+
+```bash
+streamlit run app.py
+```
+
+Streamlit reads `app.py` from top to bottom and renders each UI element in the browser.
+
+At startup, `app.py`:
+
+1. Imports the required libraries.
+2. Sets the Streamlit page config using `st.set_page_config(...)`.
+3. Applies Seaborn styling using `sb.set_theme(...)`.
+4. Injects custom CSS with `st.markdown(..., unsafe_allow_html=True)`.
+5. Shows the page title and intro text.
+6. Loads the dataset using `pd.read_csv("AI-Data.csv")`.
+
+## 5. Data Flow
+
+The dataset flow is:
+
+```text
+AI-Data.csv
+    -> pd.read_csv("AI-Data.csv")
+    -> data
+    -> data_processed for visualization encoding
+    -> X and y for model training
+    -> trained models
+    -> charts and prediction output
+```
+
+`data` keeps the original dataset values.
+
+`data_processed` is a copy of `data`. Text/category columns are converted to numeric labels with `LabelEncoder`. This makes correlation heatmap calculations possible because correlation requires numeric data.
+
+The original `data` is still used for charts like the pairplot, because those charts can display the original class labels.
+
+## 6. Visualization Flow
+
+The dashboard shows these sections in order:
+
+1. **Dataset Preview**
+   - Uses `st.dataframe(data.head(), width="stretch")`.
+   - Shows the first few rows of the CSV.
+
+2. **Correlation Heatmap**
+   - Uses `data_processed.corr(numeric_only=True)`.
+   - Displays a Seaborn heatmap.
+   - Helps understand which encoded fields move together.
+
+3. **Feature Relationships**
+   - Uses `sb.pairplot(data, hue="Class")`.
+   - Shows relationships between numeric features grouped by the student class.
+
+4. **Explore Data**
+   - Uses `st.selectbox(...)` so the user can choose one chart:
+     - Distribution of Study Activity
+     - Performance vs Activity
+     - Class Distribution
+   - The selected option controls which chart is rendered.
+
+5. **Model Performance**
+   - Shows accuracy values for the trained models.
+
+6. **Model Comparison**
+   - Builds `acc_df` and renders it with `st.bar_chart(...)`.
+   - Compares model accuracy visually.
+
+7. **Where Predictions Go Wrong**
+   - Uses `confusion_matrix(y_test, pred_rf)`.
+   - Displays Random Forest prediction mistakes and correct predictions.
+
+8. **What matters most?**
+   - Uses `model_rf.feature_importances_`.
+   - Shows which input features the Random Forest model uses most.
+
+9. **Try Your Own Prediction**
+   - Uses sliders and a selectbox to collect user input.
+   - Runs the Random Forest model on that input.
+   - Displays the predicted class.
+
+## 7. Model Training Flow
+
+The current model feature list is:
+
+```python
+model_features = [
+    "raisedhands",
+    "VisITedResources",
+    "Discussion",
+    "StudentAbsenceDays",
+]
+```
+
+The target is:
+
+```python
+y = data["Class"]
+```
+
+The feature dataframe is created with:
+
+```python
+X = pd.get_dummies(data[model_features], columns=["StudentAbsenceDays"], dtype=float)
+```
+
+This converts `StudentAbsenceDays` into numeric dummy columns:
+
+- `StudentAbsenceDays_Above-7`
+- `StudentAbsenceDays_Under-7`
+
+This is important because `StandardScaler` cannot scale text values. The dummy encoding prevents errors like:
+
+```text
+could not convert string to float: 'M'
+```
+
+The data is split using:
+
+```python
+train_test_split(X, y, test_size=0.2, random_state=42)
+```
+
+The features are scaled using:
+
+```python
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+```
+
+Then three models are trained:
+
+```python
+DecisionTreeClassifier()
+RandomForestClassifier()
+LogisticRegression(max_iter=1000)
+```
+
+Each model predicts on `X_test`, and `accuracy_score(...)` calculates its accuracy.
+
+## 8. Prediction Flow
+
+The user enters:
+
+- Raised Hands (Participation)
+- Visited Resources (Study Material Usage)
+- Discussion Participation
+- Absence
+
+The app builds a one-row input dataframe:
+
+```python
+input_data = pd.DataFrame([{
+    "raisedhands": raised,
+    "VisITedResources": resources,
+    "Discussion": discussion,
+    f"StudentAbsenceDays_{absence}": 1.0,
+}])
+```
+
+Then it aligns the input columns with the training columns:
+
+```python
+input_data = input_data.reindex(columns=X.columns, fill_value=0.0)
+```
+
+This keeps prediction synced with training. For example, if training uses both absence dummy columns, the user input is reshaped to match that exact structure.
+
+Then the app scales and predicts:
+
+```python
+input_scaled = scaler.transform(input_data)
+prediction = model_rf.predict(input_scaled)
+```
+
+The Random Forest model is used for the final user-facing prediction.
+
+## 9. How Things Are Synced
+
+The most important sync point is the relationship between training features and user prediction input.
+
+Training creates `X` from:
+
+```python
+pd.get_dummies(data[model_features], columns=["StudentAbsenceDays"], dtype=float)
+```
+
+Prediction then uses:
+
+```python
+input_data.reindex(columns=X.columns, fill_value=0.0)
+```
+
+This means:
+
+- The model always receives columns in the same order used during training.
+- Missing dummy columns are filled with `0.0`.
+- The scaler receives numeric data only.
+- The Random Forest receives the same feature shape during prediction that it saw during training.
+
+The visualization flow and model flow are separate:
+
+- `data_processed` is mainly for correlation and basic chart encoding.
+- `X` and `y` are for ML training and prediction.
+- The user input only connects to the prediction pipeline through `input_data -> scaler -> model_rf`.
+
+## 10. UI Flow
+
+The UI is built sequentially in `app.py`.
+
+Streamlit renders items in the same order they appear in the file:
+
+1. Page styling and background image.
+2. App title and explanation.
+3. Dataset preview.
+4. Heatmap section.
+5. Pairplot section.
+6. Explore Data interactive chart selector.
+7. Model performance section.
+8. Model comparison chart.
+9. Confusion matrix.
+10. Feature importance chart.
+11. Prediction form.
+
+The UI currently uses:
+
+- `st.container(border=True)` to group sections.
+- `st.divider()` to separate sections.
+- `st.columns(...)` to align accuracy outputs and prediction input/result side by side.
+- Custom CSS to add the page background image, visible navbar, readable panel backgrounds, borders, and hover effects.
+
+## 11. Important Notes
+
+- Run the app with `streamlit run app.py`, not `python app.py`.
+- `AI-Data.csv` must stay in the same folder as `app.py`, because the code reads it with a relative path.
+- If the dataset column names change, update `model_features` and any chart columns using those names.
+- If new categorical columns are added to model training, encode them before scaling.
+- The final prediction currently uses the Random Forest model.
+
+## 12. Setup Steps
+
+From the project folder:
+
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+Then open the local Streamlit URL shown in the terminal, usually:
+
+```text
+http://localhost:8501
+```
+
+## 13. Current Project Summary
+
+This project is a student performance analytics dashboard. It combines data visualization and machine learning in one Streamlit page. The CSV dataset feeds both the visual charts and the ML pipeline. The model pipeline uses selected student activity fields, scales them, trains three classifiers, compares their accuracy, and uses Random Forest for live prediction from user inputs.
