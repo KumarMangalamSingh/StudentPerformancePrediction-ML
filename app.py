@@ -431,7 +431,7 @@ with st.container(border=True):
     if data.empty:
         st.info("No active rows are currently available in the dataset. Submit the form below to start collecting active records.")
     else:
-        st.dataframe(data.head(), width="stretch")
+        st.dataframe(data, width="stretch", height=420)
 
 st.divider()
 with st.container(border=True):
@@ -471,7 +471,7 @@ Add a new student record here and save it directly into the dataset file used by
             questions_answered = st.number_input("Questions Answered", min_value=0, max_value=10, value=0, step=1, key="questions_answered_input")
 
         with form_col2:
-            active_participation = st.number_input("Active Participation", min_value=0, max_value=100, value=0, step=1, key="active_participation_input")
+            active_participation = st.number_input("Active Participation", min_value=0, max_value=10, value=0, step=1, key="active_participation_input")
             unit_test_marks = st.number_input("Unit Test Marks", min_value=0, max_value=100, value=0, step=1, key="unit_test_marks_input")
             unit_test_max_marks = st.number_input("Unit Test Max Marks", min_value=1, max_value=100, value=100, step=1, key="unit_test_max_marks_input")
             periodic_test_marks = st.number_input("Periodic Test Marks", min_value=0, max_value=100, value=0, step=1, key="periodic_test_marks_input")
@@ -483,15 +483,31 @@ Add a new student record here and save it directly into the dataset file used by
             parent_answering = st.selectbox("Parent Answering Survey", category_options["ParentAnsweringSurvey"], key="parent_answering_input")
             parent_satisfaction = st.selectbox("Parent School Satisfaction", category_options["ParentschoolSatisfaction"], key="parent_satisfaction_input")
             absence_days = st.selectbox("Student Absence Days", category_options["StudentAbsenceDays"], key="absence_days_input")
-            student_class = st.selectbox("Class", category_options["Class"], key="student_class_input")
             submit_new_record = st.form_submit_button("Save New Record", use_container_width=True)
 
         if submit_new_record:
             questions_answered = max(0, min(int(questions_answered), 10))
+            active_participation = max(0, min(int(active_participation), 10))
             raisedhands_value = max(0, min(int(raisedhands_value), 10))
             discussion = max(0, min(int(discussion), 10))
             visited_resources = max(0, min(int(DEFAULT_VISITED_RESOURCES), 100))
             announcements_view = max(0, min(int(DEFAULT_ANNOUNCEMENTS_VIEW), 10))
+            unit_test_percent = round((int(unit_test_marks) / max(int(unit_test_max_marks), 1)) * 100, 1)
+            periodic_test_percent = round((int(periodic_test_marks) / max(int(periodic_test_max_marks), 1)) * 100, 1)
+            insight_bundle = build_student_insights(
+                questions_answered,
+                active_participation,
+                unit_test_percent,
+                periodic_test_percent,
+                raisedhands_value,
+                visited_resources,
+                announcements_view,
+                discussion,
+                absence_days,
+                parent_answering,
+                parent_satisfaction,
+            )
+            student_class = score_to_prediction_label(insight_bundle["improvement_score"])
             new_row = {
                 "StudentName": student_name.strip() if student_name.strip() else "Unnamed Student",
                 "gender": gender,
@@ -499,7 +515,7 @@ Add a new student record here and save it directly into the dataset file used by
                 "SectionID": "A",
                 "Topic": topic,
                 "QuestionsAnswered": questions_answered,
-                "ActiveParticipation": int(active_participation),
+                "ActiveParticipation": active_participation,
                 "UnitTestMarks": int(unit_test_marks),
                 "UnitTestMaxMarks": int(unit_test_max_marks),
                 "PeriodicTestMarks": int(periodic_test_marks),
@@ -533,15 +549,6 @@ for col in data_processed.columns:
 
 st.divider()
 with st.container(border=True):
-    st.subheader("Correlation Heatmap")
-
-    st.markdown("""
-**How to read this:**
-- Values closer to **1** = strong relationship
-- Values closer to **0** = weak relationship
-- Example: If two things have high value, they often happen together
-""")
-
     if data.empty:
         st.info("Correlation heatmap will appear after active records are available.")
     else:
