@@ -1,8 +1,60 @@
 ﻿import streamlit as st
-import pandas as pd
-import seaborn as sb
-import matplotlib.pyplot as plt
+import sys
+import site
 from pathlib import Path
+
+USER_SITE_CANDIDATES = []
+try:
+    USER_SITE_CANDIDATES.append(site.getusersitepackages())
+except Exception:
+    pass
+
+local_appdata = Path.home() / "AppData" / "Local" / "Packages"
+USER_SITE_CANDIDATES.extend(
+    local_appdata.glob("PythonSoftwareFoundation.Python.3.13_*\\LocalCache\\local-packages\\Python313\\site-packages")
+)
+
+for candidate in USER_SITE_CANDIDATES:
+    candidate_str = str(candidate)
+    if candidate_str and candidate_str not in sys.path and Path(candidate_str).exists():
+        sys.path.append(candidate_str)
+
+import pandas as pd
+try:
+    import seaborn as sb
+except ModuleNotFoundError:
+    class SimpleSeabornFallback:
+        def set_theme(self, style="whitegrid", palette="Set2"):
+            plt.style.use("seaborn-v0_8-whitegrid")
+
+        def barplot(self, data, x, y, ax, hue=None, color=None):
+            if hue is None:
+                ax.bar(data[x].astype(str), data[y], color=color or "#4c78a8")
+                return
+
+            pivot = data.pivot(index=x, columns=hue, values=y).fillna(0)
+            categories = list(pivot.index.astype(str))
+            hue_levels = list(pivot.columns.astype(str))
+            width = 0.8 / max(len(hue_levels), 1)
+            positions = list(range(len(categories)))
+
+            for idx, hue_level in enumerate(hue_levels):
+                offsets = [pos - 0.4 + width / 2 + idx * width for pos in positions]
+                ax.bar(offsets, pivot[hue_level].tolist(), width=width, label=hue_level)
+
+            ax.set_xticks(positions)
+            ax.set_xticklabels(categories)
+            ax.legend(title=hue)
+
+        def histplot(self, values, kde=True, ax=None):
+            ax.hist(values.dropna(), bins=10, color="#4c78a8", alpha=0.85, edgecolor="white")
+
+        def countplot(self, x, ax=None):
+            counts = pd.Series(x).value_counts().sort_index()
+            ax.bar(counts.index.astype(str), counts.values, color="#4c78a8")
+
+    sb = SimpleSeabornFallback()
+import matplotlib.pyplot as plt
 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder, StandardScaler
